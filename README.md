@@ -1,4 +1,4 @@
-# Media Microservice
+# S3 Microservice
 
 A lightweight Go microservice that hosts a **MinIO** container as a local S3-compatible object storage service, exposing 2 endpoints for file upload and download. Built on a clean architecture blueprint with structured logging, rate limiting, circuit breaker pattern, and HTTP request handling via `chi` router.
 
