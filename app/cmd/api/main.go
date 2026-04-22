@@ -10,16 +10,10 @@ import (
 	"time"
 
 	"hotel.com/app/internal/config"
-	"hotel.com/app/internal/database"
 	"hotel.com/app/internal/handler"
 	"hotel.com/app/internal/logging"
 	"hotel.com/app/internal/repo"
 	"hotel.com/app/internal/service"
-)
-
-const (
-	publicKeyPath  = "/app/keys/public.pem"
-	privateKeyPath = "/app/keys/private.pem"
 )
 
 func main() {
@@ -29,52 +23,39 @@ func main() {
 		os.Exit(1)
 	}
 
-	//create logger
+	// Create logger
 	l := logging.New()
-	l.Info("App initiated")
+	l.Info("MinIO service initiated")
 
-	//db connection
-	db, err := database.NewConn(os.Getenv("DATABASE_URL"))
+	// MinIO / S3 repository
+	s3, err := repo.NewS3Repo(
+		cfg.MinIO.Endpoint,
+		cfg.MinIO.AccessKey,
+		cfg.MinIO.SecretKey,
+		cfg.MinIO.UseSSL,
+	)
 	if err != nil {
-		l.Error("Conection to database failed", "err", err)
-		os.Exit(-1)
+		l.Error("failed to create S3 repo", "err", err)
+		os.Exit(1)
 	}
-	l.Info("Database connection successful")
+	l.Info("MinIO client created", "endpoint", cfg.MinIO.Endpoint)
 
-	defer db.Close()
-
-	err = database.RunMigrations(os.Getenv("DATABASE_URL"), l)
-	if err != nil {
-		os.Exit(-1)
+	// Ensure the default bucket exists at startup
+	ctx := context.Background()
+	if err := s3.EnsureBucket(ctx, cfg.MinIO.Bucket); err != nil {
+		l.Error("failed to ensure MinIO bucket", "bucket", cfg.MinIO.Bucket, "err", err)
+		os.Exit(1)
 	}
+	l.Info("MinIO bucket ready", "bucket", cfg.MinIO.Bucket)
 
-	//jwt key file check
-	if _, err := os.Stat(privateKeyPath); os.IsNotExist(err) {
-		l.Error("JWT private key file not found", "err", err)
-		os.Exit(-1)
-	}
-	//jwt key file check
-	if _, err := os.Stat(publicKeyPath); os.IsNotExist(err) {
-		l.Error("JWT public key file not found", "err", err)
-		os.Exit(-1)
-	}
+	// Service
+	svc := service.New(l, s3)
 
-	//repo creation
-	r := repo.NewDatabaseRepo(db)
+	// Handler
+	h := handler.New(svc, l, cfg.MinIO.Bucket)
 
-	//service creation
-	svc := service.New(l, r)
-
-	// handler creation
-	jwtConfig := handler.JWTConfig{
-		Issuer:     "blueprint-service",
-		Expiration: 24 * time.Minute,
-	}
-	jwtAuth := handler.NewJWTAuthenticator(jwtConfig, privateKeyPath, publicKeyPath)
-	h := handler.New(svc, l, jwtAuth)
-
-	// server creation
-	mux := h.NewServerMux(nil)
+	// HTTP server
+	mux := h.NewServerMux()
 	port := cfg.Server.Port
 	if port == 0 {
 		port = 8080
@@ -84,7 +65,7 @@ func main() {
 		Handler: mux,
 	}
 
-	l.Info("Server listening", "addr", srv.Addr)
+	l.Info("server listening", "addr", srv.Addr)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			l.Error("server failed", "err", err)
@@ -92,21 +73,17 @@ func main() {
 		}
 	}()
 
-	// Block until SIGTERM or SIGINT
+	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
 	<-quit
 
-	l.Info("Shutting down server...")
-
-	// Give in-flight requests 30s to finish
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	l.Info("shutting down server...")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
-		l.Error("Server forced to shutdown", "err", err)
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		l.Error("server forced to shutdown", "err", err)
 	}
-
-	l.Info("Server stopped")
-
+	l.Info("server stopped")
 }

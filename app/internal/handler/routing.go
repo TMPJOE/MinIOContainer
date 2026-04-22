@@ -9,7 +9,7 @@ import (
 	"hotel.com/app/internal/helper"
 )
 
-func (h *Handler) NewServerMux(rateLimiter *RateLimiter) *chi.Mux {
+func (h *Handler) NewServerMux() *chi.Mux {
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -22,27 +22,20 @@ func (h *Handler) NewServerMux(rateLimiter *RateLimiter) *chi.Mux {
 	r.Use(RequestID)
 	r.Use(CORS)
 
-	// Apply rate limiting if enabled
-	if rateLimiter != nil {
-		r.Use(RateLimitMiddleware(rateLimiter))
-	}
-
 	// Custom error handlers (JSON instead of default HTML)
 	r.NotFound(h.notFoundHandler)
 	r.MethodNotAllowed(h.methodNotAllowedHandler)
 
-	// Public routes - no authentication required
+	// Health routes — no authentication required
 	r.Group(func(r chi.Router) {
 		r.Get("/health", h.healthCheck)
 		r.Get("/ready", h.readinessCheck)
-		// Add other generic public endpoints here (metrics, version, etc.)
 	})
 
-	// Protected routes - require JWT authentication
+	// Media routes — file upload / download
 	r.Group(func(r chi.Router) {
-		r.Use(h.jwtAuth.Middleware()) // JWT authentication middleware
-
-		// Add protected routes here - keep abstract, not service-specific
+		r.Post("/upload", h.uploadFile)
+		r.Get("/download/{bucket}/{key}", h.downloadFile)
 	})
 
 	return r
@@ -54,19 +47,4 @@ func (h *Handler) notFoundHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) methodNotAllowedHandler(w http.ResponseWriter, r *http.Request) {
 	helper.RespondError(w, http.StatusMethodNotAllowed, "method not allowed")
-}
-
-// GetUserIDFromRequest extracts user ID from the authenticated request
-func GetUserIDFromRequest(r *http.Request) string {
-	return GetUserIDFromContext(r.Context())
-}
-
-// GetUserEmailFromRequest extracts user email from the authenticated request
-func GetUserEmailFromRequest(r *http.Request) string {
-	return GetUserEmailFromContext(r.Context())
-}
-
-// GetClaimsFromRequest extracts JWT claims from the authenticated request
-func GetClaimsFromRequest(r *http.Request) *JWTClaims {
-	return GetClaimsFromContext(r.Context())
 }

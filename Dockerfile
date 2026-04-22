@@ -37,9 +37,6 @@ COPY --from=builder /app/api .
 # Copy configuration
 COPY config.yaml .
 
-# Copy JWT keys directory (keys should be mounted at runtime)
-RUN mkdir -p /app/keys && chown -R appuser:appuser /app
-
 # Change ownership
 RUN chown -R appuser:appuser /app
 
@@ -51,7 +48,7 @@ EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
 # Run the application
 CMD ["./api"]

@@ -8,37 +8,23 @@ import (
 )
 
 type Server struct {
-	Host         string `yaml:"host"`
-	Port         int    `yaml:"port"`
-	ReadTimeout  string `yaml:"read_timeout"`
-	WriteTimeout string `yaml:"write_timeout"`
-	IdleTimeout  string `yaml:"idle_timeout"`
+	Host string `yaml:"host"`
+	Port int    `yaml:"port"`
 }
 
-type JWT struct {
-	Secret     string `yaml:"secret"`
-	Issuer     string `yaml:"issuer"`
-	Expiration string `yaml:"expiration"`
-}
-
-type Database struct {
-	URL string `yaml:"url"`
-}
-
-type Health struct {
-	Path      string `yaml:"path"`
-	ReadyPath string `yaml:"ready_path"`
+type MinIO struct {
+	Endpoint  string `yaml:"endpoint"`
+	AccessKey string `yaml:"access_key"`
+	SecretKey string `yaml:"secret_key"`
+	Bucket    string `yaml:"bucket"`
+	UseSSL    bool   `yaml:"use_ssl"`
 }
 
 type Config struct {
-	Server         Server                 `yaml:"server"`
-	Logging        map[string]interface{} `yaml:"logging"`
-	RateLimit      map[string]interface{} `yaml:"rate_limit"`
-	CircuitBreaker map[string]interface{} `yaml:"circuit_breaker"`
-	Health         Health                 `yaml:"health"`
+	Server Server `yaml:"server"`
+	MinIO  MinIO  `yaml:"minio"`
 }
 
-// Load reads a YAML config file, expands environment variables, and returns the parsed config.
 func Load(path string) (*Config, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
