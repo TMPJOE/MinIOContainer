@@ -35,7 +35,7 @@ func (h *Handler) NewServerMux() *chi.Mux {
 	// Media routes — file upload / download
 	r.Group(func(r chi.Router) {
 		r.Post("/upload", h.uploadFile)
-		r.Get("/download/{bucket}/{key}", h.downloadFile)
+		r.Get("/download/{bucket}/*", h.downloadFile)
 	})
 
 	return r

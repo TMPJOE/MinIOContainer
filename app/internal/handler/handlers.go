@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"hotel.com/app/internal/helper"
@@ -66,7 +67,12 @@ func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {
 		contentType = "application/octet-stream"
 	}
 
-	resp, err := h.s.UploadFile(r.Context(), h.bucket, header.Filename, file, header.Size, contentType)
+	// Prefer the explicit object_key form field when provided.
+	// This preserves the full prefix path (e.g. "hotels/{id}/{ts}-file.jpg")
+	// which would otherwise be stripped by Go's multipart filename handling.
+	objectKey := r.FormValue("object_key")
+
+	resp, err := h.s.UploadFile(r.Context(), h.bucket, header.Filename, objectKey, file, header.Size, contentType)
 	if err != nil {
 		h.l.Error("uploadFile service error", "err", err)
 		helper.RespondError(w, http.StatusInternalServerError, helper.ErrProcessingFailed.Error())
@@ -78,11 +84,16 @@ func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// downloadFile handles GET /download/{bucket}/{key}.
+// downloadFile handles GET /download/{bucket}/*.
 // Streams the object directly to the client with the correct Content-Type.
+// The wildcard captures the full object key, which may contain slashes
+// (e.g. "hotels/{hotel_id}/{timestamp}-{filename}").
 func (h *Handler) downloadFile(w http.ResponseWriter, r *http.Request) {
 	bucket := chi.URLParam(r, "bucket")
-	key := chi.URLParam(r, "key")
+	key := chi.URLParam(r, "*")
+
+	// Strip the leading slash that chi includes in the wildcard match.
+	key = strings.TrimPrefix(key, "/")
 
 	if bucket == "" || key == "" {
 		helper.RespondError(w, http.StatusBadRequest, "bucket and key path parameters are required")
