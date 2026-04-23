@@ -27,6 +27,16 @@ func main() {
 	l := logging.New()
 	l.Info("MinIO service initiated")
 
+	// Validate MinIO configuration (fail fast with clear message)
+	if cfg.MinIO.Endpoint == "" {
+		l.Error("MinIO endpoint not configured; set MINIO_ENDPOINT in env")
+		os.Exit(1)
+	}
+	if cfg.MinIO.AccessKey == "" || cfg.MinIO.SecretKey == "" {
+		l.Error("MinIO credentials missing; set MINIO_ACCESS_KEY and MINIO_SECRET_KEY in env")
+		os.Exit(1)
+	}
+
 	// MinIO / S3 repository
 	s3, err := repo.NewS3Repo(
 		cfg.MinIO.Endpoint,
