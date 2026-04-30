@@ -20,7 +20,6 @@ func (h *Handler) NewServerMux() *chi.Mux {
 	}))
 	r.Use(SecureHeaders)
 	r.Use(RequestID)
-	r.Use(CORS)
 
 	// Custom error handlers (JSON instead of default HTML)
 	r.NotFound(h.notFoundHandler)
